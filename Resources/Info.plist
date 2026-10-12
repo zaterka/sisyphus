@@ -6,6 +6,8 @@
 	<string>en</string>
 	<key>CFBundleExecutable</key>
 	<string>Sisyphus</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.sisyphus.app</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -26,6 +28,8 @@
 	<string>public.app-category.productivity</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Pedro Zaterka. GPL-3.0-or-later.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

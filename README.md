@@ -1,19 +1,35 @@
+<p align="center"><img src="docs/logo.png" width="160" alt="Sisyphus, a black-figure Greek pottery emblem: a pixel-art Sisyphus pushing his boulder up a hill"></p>
+
 # Sisyphus
 
-![Sisyphus pushing his boulder up the hill, the rock rolling back down, and him following it and sitting](docs/sisyphus.gif)
+A task manager for a never-ending workflow.
 
 [![Release](https://github.com/zaterka/sisyphus/actions/workflows/release.yml/badge.svg)](https://github.com/zaterka/sisyphus/actions/workflows/release.yml)
-
-A task manager for a never-ending workflow.
 
 ## [⬇︎ Download for Mac](https://github.com/zaterka/sisyphus/releases/latest/download/Sisyphus.dmg)
 
 Universal build for macOS 14 or later — Apple Silicon and Intel. Always the newest version.
 
-Sisyphus is a small, native macOS task manager. It lives in a borderless panel that floats above
-your other windows, pinned to the top-right corner of the screen, and shows a SNES-style pixel-art
-Sisyphus pushing his boulder up a hill. The more tasks you finish, the higher he gets. When the
-last one is done, the rock rolls back down, he follows it and sits until you add more.
+
+![Sisyphus pushing his boulder up the hill, the rock rolling back down, and him following it and sitting](docs/sisyphus.gif)
+
+## What is it?
+
+Sisyphus is a lightweight task manager for the small and large tasks of your day — the ones that
+have to be remembered, and the ones that keep being pushed to tomorrow. It lives in the corner of
+the screen, in a borderless panel that floats above your other windows, and stays out of the way
+until you look at it.
+
+Tasks have a priority, a `#tag` and an optional due date, and you can drag the open ones into the
+order you want to work through them.
+
+When the list itself is more noise than help, the scene-only toggle hides it and leaves nothing but
+the pixel-art scene: Sisyphus, his boulder and the hill.
+
+The boulder is the progress bar — he climbs as you finish tasks. At the end of the day the rock
+rolls back down. Don't worry, tomorrow we push it again.
+
+*One must imagine Sisyphus happy.* — Albert Camus
 
 ## Install
 
@@ -45,72 +61,6 @@ tasks never leave your Mac — see [Data](#data).
 ## Requirements
 
 - To use the app: macOS 14 or later, on Apple Silicon or Intel.
-- To build it: the Xcode Command Line Tools (Swift 6 toolchain). Full Xcode is not required.
-
-## Build and run
-
-```sh
-./scripts/build-app.sh      # builds a release binary and assembles build/Sisyphus.app
-open build/Sisyphus.app
-```
-
-The script signs the bundle ad-hoc so macOS will launch it locally. It keeps SwiftPM's caches
-inside the repository (`.build/`, `.spm-*/`, `.modcache/`) instead of `~/Library`.
-
-## Test
-
-```sh
-./scripts/test.sh
-```
-
-The tests use Swift Testing and cover the pure `SisyphusCore` module: the task list, progress and
-summit rules, reordering, sanitisation, persistence and the scene state machine. The script picks
-the right flags for the installed toolchain: with the Command Line Tools it points the compiler at
-the Swift Testing framework they ship (and works around a broken framework overlay), and with full
-Xcode it just runs `swift test`.
-
-## Development
-
-```sh
-./scripts/make-gif.sh       # renders docs/sisyphus.gif from the real scene code
-./scripts/make-dmg.sh       # packages build/Sisyphus.app and an Applications link into build/Sisyphus.dmg
-```
-
-`build-app.sh` takes two environment variables:
-
-```sh
-UNIVERSAL=1 APP_VERSION=1.0.7 BUILD_NUMBER=7 ./scripts/build-app.sh
-```
-
-`UNIVERSAL=1` builds `arm64` and `x86_64` as two single-arch passes (`--triple`) and merges both
-slices with `lipo`, asserting that the result really has both. `APP_VERSION` and `BUILD_NUMBER` set
-`CFBundleShortVersionString` and `CFBundleVersion` on the assembled bundle — before signing, so the
-signature covers them; the checked-in `Resources/Info.plist` is never modified.
-
-The GIF is not hand-made. `--export-gif <path>` is a hidden CLI mode of the app binary: it drives
-the real `SceneStateMachine` with a real `TaskList` value — four tasks completed one at a time, so
-`progress`, `summitPending` and `hasOpenTasks` are exactly what the app computes — and draws every
-frame through `SceneRenderer` at 640×360, 20 fps. The scenario is deterministic (a fixed clock,
-frames counted rather than timed), so `make-gif.sh` reproduces the same animation, and it exits
-non-zero if the scene fails to climb, reach the summit, roll, walk down and settle into the sit.
-
-### Releases
-
-`.github/workflows/release.yml` runs on every push to `main` and on demand: it tests, builds a
-universal `Sisyphus.app`, packages the DMG and publishes it to one rolling release tagged `latest`.
-Pull requests build and test only and never publish — and so does a manual run dispatched from any
-branch other than `main`. Documentation-only changes are skipped.
-
-The workflow force-moves the `latest` tag to the built commit, then either creates the release (on
-the very first run) or replaces the DMG asset in place with `gh release upload --clobber`. That keeps
-`.../releases/latest/download/Sisyphus.dmg` alive at all times, so there is no window where the
-download link 404s.
-
-This needs **immutable releases to be off**. Check **Settings › General › Releases** and make sure it
-is disabled: with immutable releases on, both the force-move of the `latest` tag and the asset upload
-are rejected, so the workflow fails at the publish step and the download never updates. GitHub ships
-the setting off, but treat that as something to verify rather than something to rely on — if a
-publish starts failing with a release-related error, look there first.
 
 ## Features
 
@@ -193,15 +143,18 @@ Tasks are stored as JSON in `~/Library/Application Support/Sisyphus/tasks.json`.
   starts empty instead of failing.
 - The file location is logged at launch under the subsystem `com.sisyphus.app`.
 
-## Layout
+## Development
 
-```
-Sources/SisyphusCore/         pure, testable logic (Foundation and os): tasks, persistence, scene state machine
-Sources/Sisyphus/             the app: AppKit panel and menu, SwiftUI views, the scene (Scene/)
-Sources/Sisyphus/Scene/       sprites, background, renderer, layout, and the hidden --export-gif mode
-Tests/SisyphusCoreTests/      Swift Testing tests for SisyphusCore
-Resources/Info.plist          bundle metadata used by build-app.sh
-scripts/                      build-app.sh, test.sh, make-gif.sh, make-dmg.sh
-docs/sisyphus.gif             the animation above, rendered from the scene code
-.github/workflows/release.yml CI: test, universal build, DMG, rolling `latest` release
-```
+Building, testing, the scripts and the release process are documented in
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+
+## License
+
+Sisyphus is free software, released under the GNU General Public License, version 3 or later
+(GPL-3.0-or-later): you may redistribute it and modify it under the terms of that license. The full
+text is in [`LICENSE`](LICENSE).
+
+It comes with absolutely no warranty, as the license says. The source is at
+[github.com/zaterka/sisyphus](https://github.com/zaterka/sisyphus).
+
+Copyright © 2026 Pedro Zaterka.

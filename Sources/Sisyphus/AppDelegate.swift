@@ -46,8 +46,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate()
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "Sisyphus",
+            // The joke keeps its own paragraph; the second one is the GPL's "Appropriate Legal
+            // Notices" for a GUI program, which has to be reachable from the About box. The
+            // copyright line itself comes from NSHumanReadableCopyright in Info.plist.
             .credits: NSAttributedString(
-                string: "One must imagine Sisyphus happy.",
+                string: """
+                    One must imagine Sisyphus happy.
+
+                    This program is free software: you can \
+                    redistribute it and/or modify it under the terms of the GNU General Public \
+                    License v3 or later. It comes with ABSOLUTELY NO WARRANTY. Source: \
+                    https://github.com/zaterka/sisyphus
+                    """,
                 attributes: [.foregroundColor: NSColor.secondaryLabelColor]
             ),
         ])
