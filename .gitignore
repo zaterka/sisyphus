@@ -1,0 +1,11 @@
+.build/
+build/
+.spm-cache/
+.spm-config/
+.spm-security/
+.modcache/
+.DS_Store
+
+# Planning docs (local only)
+PLAN*.md
+REVIEW-FIXES-PLAN.md

@@ -1,0 +1,172 @@
+name: Release
+
+# Every push to main builds, tests and publishes a universal DMG to the rolling `latest` release.
+# Pull requests only build and test; they never publish, and neither does a manual dispatch from a
+# branch other than main. Docs-only changes are skipped, so a regenerated GIF or a README edit does
+# not republish the app.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Every publishing run (a push to main, or a manual dispatch from main) shares one group, so two of
+# them can never race on the `latest` tag or its asset. Runs that never publish — pull requests, and
+# a dispatch from any other branch — take their own per-ref group instead: GitHub keeps only ONE
+# pending run per group and drops a queued run when a newer one arrives — regardless of
+# cancel-in-progress — so a non-publishing run must not be able to cancel a queued publish.
+# cancel-in-progress stays false: an in-flight build should finish, never be killed halfway through
+# replacing the release asset.
+concurrency:
+  group: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'release' || format('release-pr-{0}', github.ref) }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build, test and publish
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          preferred=(/Applications/Xcode_26*.app)
+          installed=(/Applications/Xcode_*.app)
+          shopt -u nullglob
+
+          # Newest first, preferring a release Xcode: a plain version sort ranks a beta above the
+          # release it precedes (Xcode_26.2_beta.app > Xcode_26.2.app). The first pass drops betas
+          # and release candidates; if that leaves nothing, the second pass takes the newest of
+          # whatever is there rather than giving up.
+          newest() {
+            local candidate
+            for candidate in $(printf '%s\n' "$@" \
+              | grep -Ev '(_[Bb]eta|_[Rr][Cc]|Release_Candidate)' | sort -rV); do
+              printf '%s\n' "$candidate"
+              return 0
+            done
+            for candidate in $(printf '%s\n' "$@" | sort -rV); do
+              printf '%s\n' "$candidate"
+              return 0
+            done
+          }
+
+          # Xcode_26.0.app is only an alias for Xcode_26.app: prefer the canonical name when both
+          # exist, so the log and `xcode-select -p` show the real one.
+          canonical() {
+            local app="$1"
+            if [ "$app" != "${app%.0.app}.app" ] && [ -d "${app%.0.app}.app" ]; then
+              app="${app%.0.app}.app"
+            fi
+            printf '%s\n' "$app"
+          }
+
+          XCODE=""
+          if [ "${#preferred[@]}" -gt 0 ]; then
+            XCODE="$(newest "${preferred[@]}")"
+          elif [ "${#installed[@]}" -gt 0 ]; then
+            XCODE="$(newest "${installed[@]}")"
+          fi
+
+          if [ -z "$XCODE" ]; then
+            # No Xcode_*.app in /Applications at all (a stripped image, or one whose Xcode lives
+            # elsewhere): keep the image's own selection instead of failing the whole build.
+            echo "warning: no /Applications/Xcode_*.app found; keeping the image default" >&2
+          else
+            XCODE="$(canonical "$XCODE")"
+            echo "==> selecting $XCODE"
+            sudo xcode-select -s "$XCODE"
+          fi
+          echo "==> $(xcode-select -p)"
+          swift --version
+
+      - name: Test
+        run: ./scripts/test.sh
+
+      - name: Build Sisyphus.app
+        env:
+          UNIVERSAL: "1"
+          APP_VERSION: "1.0.${{ github.run_number }}"
+          BUILD_NUMBER: "${{ github.run_number }}"
+        run: ./scripts/build-app.sh
+
+      - name: Package DMG
+        run: ./scripts/make-dmg.sh
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: Sisyphus.dmg
+          path: build/Sisyphus.dmg
+          retention-days: 14
+
+      - name: Write release notes
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(git rev-parse --short HEAD)"
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/Sisyphus.app/Contents/Info.plist)"
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "Sisyphus $VERSION"
+            echo
+            echo "Built automatically from commit $SHORT_SHA ($GITHUB_SHA) on $(date -u '+%Y-%m-%d %H:%M UTC')."
+            echo "Universal binary: Apple Silicon and Intel."
+            echo
+            echo "Install"
+            echo "-------"
+            echo "1. Download Sisyphus.dmg below and open it."
+            echo "2. Drag Sisyphus to your Applications folder."
+            echo "3. Open Sisyphus. macOS blocks the first launch, because the app is not notarised."
+            echo "   Open System Settings > Privacy & Security, scroll down to the message about"
+            echo "   Sisyphus and click 'Open Anyway'. This is needed only once."
+            echo "4. If macOS says the app 'is damaged', run:"
+            echo "   xattr -dr com.apple.quarantine /Applications/Sisyphus.app"
+            echo
+            echo "Requires macOS 14 or later. Do not disable Gatekeeper."
+          } > "$NOTES"
+          cat "$NOTES"
+
+      - name: Publish rolling release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          NOTES="$RUNNER_TEMP/release-notes.md"
+
+          # Move the lightweight `latest` tag to the commit that was just built. A lightweight tag
+          # needs no git identity (no tagger is written), and actions/checkout left the token in
+          # the local git configuration, so the force push authenticates with no extra setup.
+          git tag -f latest "$GITHUB_SHA"
+          git push -f origin latest
+
+          # Reuse the release when it already exists and replace the asset in place: that keeps
+          # https://github.com/${{ github.repository }}/releases/latest/download/Sisyphus.dmg
+          # alive at every moment, so there is no 404 window between builds. Only the very first
+          # run creates the release.
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest build/Sisyphus.dmg --clobber
+            gh release edit latest --notes-file "$NOTES" --latest
+          else
+            gh release create latest build/Sisyphus.dmg \
+              --title "Sisyphus (latest build)" \
+              --notes-file "$NOTES" \
+              --latest
+          fi
+
+          echo "==> https://github.com/${{ github.repository }}/releases/latest/download/Sisyphus.dmg"
