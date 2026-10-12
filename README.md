@@ -2,7 +2,7 @@
 
 # Sisyphus
 
-A task manager for a never-ending workflow.
+A task manager for a never-ending workload.
 
 [![Release](https://github.com/zaterka/sisyphus/actions/workflows/release.yml/badge.svg)](https://github.com/zaterka/sisyphus/actions/workflows/release.yml)
 
